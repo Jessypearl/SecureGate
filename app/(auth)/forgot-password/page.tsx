@@ -6,7 +6,6 @@ import { useFormState } from "react-dom";
 import Link from "next/link";
 import { forgotPassword } from "@/lib/actions";
 import { SubmitButton } from "@/components/submit-button";
-import type { ActionResult } from "@/lib/actions";
 
 export default function ForgotPasswordPage() {
   const [state, formAction] = useFormState(forgotPassword, null);
@@ -16,7 +15,7 @@ export default function ForgotPasswordPage() {
       <div className="text-center">
         <h1 className="text-2xl font-bold">Check your email</h1>
         <p className="mt-2 text-slate-400">
-          If an account with that email exists, we sent a password reset link.
+          Please check your email, we have sent a password reset link. The reset link expires in 15 minutes.
         </p>
         <Link
           href="/auth"

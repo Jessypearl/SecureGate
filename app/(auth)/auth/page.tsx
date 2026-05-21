@@ -87,34 +87,18 @@ function PasswordStrength({ password }: { password: string }) {
     { label: "Number", pass: /[0-9]/.test(password) },
   ];
 
-  const passed = checks.filter((c) => c.pass).length;
+  const unmet = checks.filter((c) => !c.pass);
+  if (unmet.length === 0) return null;
 
   return (
-    <div className="mt-2 space-y-1">
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-700">
-        <div
-          className={`h-full rounded-full transition-all ${
-            passed === 0
-              ? "w-0"
-              : passed <= 2
-                ? "w-1/3 bg-red-500"
-                : passed === 3
-                  ? "w-2/3 bg-yellow-500"
-                  : "w-full bg-green-500"
-          }`}
-        />
-      </div>
-      <ul className="text-xs text-slate-400">
-        {checks.map((check) => (
-          !check.pass && (
-            <li key={check.label} className="flex items-center gap-1">
-              <span>{"\u25CB"}</span>
-              {check.label}
-            </li>
-          )
-        ))}
-      </ul>
-    </div>
+    <ul className="mt-2 text-xs text-slate-400 space-y-1">
+      {unmet.map((check) => (
+        <li key={check.label} className="flex items-center gap-1">
+          <span>{"\u25CB"}</span>
+          {check.label}
+        </li>
+      ))}
+    </ul>
   );
 }
 

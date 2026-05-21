@@ -50,7 +50,7 @@ export async function sendPasswordResetEmail(
       from: FROM,
       to: email,
       subject: "Reset your password",
-      html: `<p>Click the link below to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 1 hour. If you did not request this, you can safely ignore this email.</p>`,
+      html: `<p>Click the link below to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 15 minutes. If you did not request this, you can safely ignore this email.</p>`,
     });
 
     return { success: true };

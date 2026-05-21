@@ -72,7 +72,8 @@ export async function signup(
     };
   }
 
-  const { email, password } = parsed.data;
+  const email = parsed.data.email.toLowerCase();
+  const { password } = parsed.data;
 
   const ip = await getClientIp();
   const rl = checkRateLimit(`signup:${ip}`);
@@ -152,7 +153,7 @@ export async function forgotPassword(
     };
   }
 
-  const { email } = parsed.data;
+  const email = parsed.data.email.toLowerCase();
 
   const ip = await getClientIp();
   const rl = checkRateLimit(`forgot-password:${ip}`);

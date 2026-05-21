@@ -1,10 +1,8 @@
-// NextAuth v5 configuration â€” Credentials provider with email/password auth
+// NextAuth v5 configuration — Credentials provider with email/password auth
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
-import { comparePassword } from "./password";
-import { db } from "./db";
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   providers: [
@@ -26,10 +24,29 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const { email, password } = parsed.data;
+        const email = parsed.data.email.toLowerCase();
+        const { password } = parsed.data;
+
+        const { checkRateLimit } = await import("./rate-limiter");
+        const rl = checkRateLimit(`login:${email}`);
+        if (!rl.allowed) {
+          return null;
+        }
 
         try {
-          const user = await db.user.findUnique({ where: { email } });
+          const { db } = await import("./db");
+          const { comparePassword } = await import("./password");
+
+          const user = await db.user.findUnique({
+            where: { email },
+            select: {
+              id: true,
+              email: true,
+              emailVerified: true,
+              passwordHash: true,
+              passwordChangedAt: true,
+            },
+          });
 
           if (!user) {
             return null;
@@ -48,9 +65,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
             id: user.id,
             email: user.email,
             emailVerified: user.emailVerified,
+            passwordChangedAt: user.passwordChangedAt.toISOString(),
           };
-        } catch (err) {
-          console.error("Login database error:", err);
+        } catch {
           return null;
         }
       },
@@ -61,25 +78,8 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.emailVerified = (user as { emailVerified: boolean }).emailVerified;
+        token.passwordChangedAt = (user as { passwordChangedAt: string }).passwordChangedAt;
         return token;
-      }
-      if (token.id) {
-        try {
-          const dbUser = await db.user.findUnique({
-            where: { id: token.id as string },
-            select: { passwordChangedAt: true },
-          });
-          if (dbUser) {
-            const tokenIat = token.iat
-              ? new Date(token.iat * 1000).getTime()
-              : 0;
-            if (dbUser.passwordChangedAt.getTime() > tokenIat + 1000) {
-              return {};
-            }
-          }
-        } catch {
-          console.error("JWT passwordChangedAt check failed");
-        }
       }
       return token;
     },
@@ -89,19 +89,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       };
       if (session.user) {
         session.user.id = token.id as string;
-        const tokenVerified = token.emailVerified as boolean;
-        session.user.emailVerified = tokenVerified;
-        if (!tokenVerified) {
-          try {
-            const dbUser = await db.user.findUnique({
-              where: { id: token.id as string },
-              select: { emailVerified: true },
-            });
-            if (dbUser) session.user.emailVerified = dbUser.emailVerified;
-          } catch {
-            console.error("Session emailVerified DB check failed");
-          }
-        }
+        session.user.emailVerified = token.emailVerified as boolean;
       }
       return rawSession;
     },
@@ -111,5 +99,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   },
   session: {
     strategy: "jwt",
+    maxAge: 86400, // 24 hours
   },
 });

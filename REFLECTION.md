@@ -23,11 +23,9 @@ Had to manually tell the agent to hash passwords. I also had to tell the agent t
   }.** 
   'lib/actions.ts' lines 108-115
   
-  **My answer:** Signup Failures: In lib/actions.ts, if the verification email fails to send during signup, the code attempts to delete the newly created user. A malicious or impatient user clicking "resend" 100 times will generate 100 valid tokens in the database, leading to DB bloat and security risks.
-  
-  **Why those features violate YAGNI:** Social login solves a different problem — reducing signup friction for end users. There are no end users yet. Building MFA now means you're adding protection to something that isn't even finished. Audit logs are for answering questions like "who logged in, when, and from where." That question matters when you have real users, a compliance requirement, or a business reason to track behaviour.
- 
- **How to add them correctly later:** Social login — NextAuth already supports OAuth providers. When the time comes, I'll add a provider field to my User model, make password nullable (since social users won't have one), and register my OAuth app credentials. For MFA, I'll add a mfaEnabled boolean and a mfaSecret field to the User model. For audit logs, I'll You create an AuditLog model in Prisma with fields like userId, action, ipAddress, and timestamp.
+  **My answer:** Left unprotected, the login form is just an open door. Nothing stops someone from writing a script that tries thousands of password combinations against a real email address. Without rate limiting, SecureGate would sit there and process every single attempt.
+  **Two things that can go wrong** First, if reset tokens never expire, a token sitting in someone's old email becomes a permanent backdoor into their account. Second, if I store the raw token in the database and the database is ever compromised, an attacker gets working reset links handed to them.
+
 
 ### Q2 - Law of Leaky Abstractions
  **code reference** import NextAuth from "next-auth";
@@ -45,8 +43,8 @@ Had to manually tell the agent to hash passwords. I also had to tell the agent t
   emailVerified: user.emailVerified,
  }; 'lib/auths.ts' lines 47-51
  
- **My answer** SociaL login would violate YAGNI's Law because we don't have end users yet. MFA would violate YAGNI's Law because we don't have end users yet. Audit logs would violate YAGNI's law because building an audit system today means designing a logging schema, deciding what events to capture, and maintaining that infrastructure — all for data nobody is reading.
- **How I would add them correctly later** When the time comes, I'll add a provider field to the User model, make password nullable (since social users won't have one), and register the OAuth app credentials.
+ **My answer** SociaL login would violate YAGNI's Law because we don't have end users yet. MFA would violate YAGNI's Law because MFA is a layer you add on top of a working login system. I don't have a working login system yet. Audit logs would violate YAGNI's law because building an audit system today means designing a logging schema, deciding what events to capture, and maintaining that infrastructure — all for data nobody is reading.
+ **How I would add them correctly later** When the time comes, I'll add a provider field to the User model, make the password nullable (since social users won't have one), and register the OAuth app credentials.
 
 ### Q4 - Kerckhoffs's Law
  **code reference**  pass: process.env.SMTP_PASSWORD 'emails.ts' line 11
@@ -56,9 +54,7 @@ Had to manually tell the agent to hash passwords. I also had to tell the agent t
  
  **What happens if I used SHA-256 instead** Rainbow tables — attackers pre-compute a giant list of SHA-256 hashes for common passwords. If your hash matches one on the list, the password is cracked instantly. Dictionary attacks — SHA-256 is extremely fast, so an attacker can hash millions of guesses per second until one matches. No salt — if two users have the same password, their SHA-256 hashes are identical, making bulk cracking trivial.
 
- **Why bcrypt is slow by design** bcrypt has a cost factor (salt rounds = 12 in SecureGate) that makes each hash computation deliberately expensive. An attacker trying a million guesses doesn't get a million instant results.
-
- **The Kerckhoffs connection** bcrypt stays secure even when everything about the algorithm is public — because the salt and cost factor make brute-force economically unviable, not theoretically impossible.
+ 
 
 
 ### Q5 - Postel's Law + Security by Design
@@ -78,7 +74,7 @@ Had to manually tell the agent to hash passwords. I also had to tell the agent t
 
  **My answer** The Boy Scout Rule means: whenever you touch a file, leave it slightly cleaner than it was — even if the mess wasn't yours.
  
- **A real example I'd find in the SecureGate scaffold** When setting up lib/db.ts, the Prisma singleton, I might notice the generated code has a variable named prisma declared twice — once at the top level and once inside the globalThis check. It still works, but it's confusing to read.
+ **A real example found in the SecureGate scaffold** When setting up lib/db.ts, the Prisma singleton, I might notice the generated code has a variable named prisma declared twice — once at the top level and once inside the globalThis check. It still works, but it's confusing to read.
  
  **What I'd fiX** Rename the second one to prismaClient to make the distinction clear, and remove a leftover console.log("DB connected") that was probably added during testing and never removed.
 
@@ -160,7 +156,7 @@ return { success: true, data: undefined }; // ← user is never marked as verifi
 
  **My answer** The debt is hardcoded token expiry times. In lib/tokens.ts the expiry durations are written as raw math directly in the code. 
 
- **Why it's debt: That magic number 24 * 60 * 60 * 1000 means nothing to someone reading the code cold. Worse, if you need to change the expiry window, you have to hunt down every place it appears — and hope you don't miss one.
+ **Why it's debt** That magic number 24 * 60 * 60 * 1000 means nothing to someone reading the code cold. Worse, if you need to change the expiry window, you have to hunt down every place it appears — and hope you don't miss one.
 
  **Why I left it** It works. When you're scaffolding fast, you write the thing that gets it running and move on.
 
@@ -175,7 +171,7 @@ return { success: true, data: undefined }; // ← user is never marked as verifi
 ### Q15 - Synthesis question
  **code reference**
 
- **My answer** When money is involved, everything I already built in SecureGate still applies — it just has higher stakes. Auth & verification — a user must be authenticated AND email-verified before they can pay. Same redirect logic, stricter enforcement.Password hashing & session security — a compromised account now means a compromised payment method. Rate limiting — now protects the payment endpoint too, not just login. Error handling — same pattern: never expose internals to the client, return clean user-facing messages. Environment variables — your Flutterwave secret key lives in .env just like your Resend key.
+ **My answer** When money is involved, everything I already built in SecureGate still applies — it just has higher stakes. Auth & verification — a user must be authenticated AND email-verified before they can pay. Same redirect logic, stricter enforcement.Password hashing & session security — a compromised account now means a compromised payment method. Rate limiting — now protects the payment endpoint too, not just login. Error handling — same pattern: never expose internals to the client, return clean user-facing messages. Environment variables — my Flutterwave secret key lives in .env just like my Resend key.
  
  **What becomes more critical when money is involved** Idempotency, webhook verification, audit logging, user trust signals and database transaction becomes important.
 

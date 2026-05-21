@@ -38,7 +38,7 @@ export async function createPasswordResetToken(userId: string) {
     data: {
       token: hashedToken,
       userId,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
     },
   });
 

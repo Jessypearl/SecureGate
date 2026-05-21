@@ -1,8 +1,8 @@
-// bcrypt helpers — hash and compare passwords with salt rounds = 12
+// bcrypt helpers — hash and compare passwords with salt rounds = 10
 
 import bcrypt from "bcryptjs";
 
-const SALT_ROUNDS = 12;
+const SALT_ROUNDS = 10;
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = await bcrypt.genSalt(SALT_ROUNDS);

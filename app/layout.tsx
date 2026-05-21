@@ -5,6 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "SecureGate",
   description: "Production-grade authentication system",
+  icons: [{ rel: "icon", url: "/favicon.svg", type: "image/svg+xml" }],
 };
 
 export default function RootLayout({
