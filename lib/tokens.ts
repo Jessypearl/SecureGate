@@ -15,11 +15,13 @@ export async function createVerificationToken(userId: string) {
   const rawToken = generateRawToken();
   const hashedToken = hashToken(rawToken);
 
+  await db.verificationToken.deleteMany({ where: { userId } });
+
   await db.verificationToken.create({
     data: {
       token: hashedToken,
       userId,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
     },
   });
 
@@ -29,6 +31,8 @@ export async function createVerificationToken(userId: string) {
 export async function createPasswordResetToken(userId: string) {
   const rawToken = generateRawToken();
   const hashedToken = hashToken(rawToken);
+
+  await db.passwordResetToken.deleteMany({ where: { userId } });
 
   await db.passwordResetToken.create({
     data: {
@@ -73,7 +77,9 @@ export async function validatePasswordResetToken(rawToken: string) {
     return null;
   }
 
-  await db.passwordResetToken.delete({ where: { id: record.id } });
+  return record;
+}
 
-  return record.userId;
+export async function consumePasswordResetToken(id: string) {
+  await db.passwordResetToken.delete({ where: { id } });
 }

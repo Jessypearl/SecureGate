@@ -1,4 +1,4 @@
-// Sign Out page — confirms signout by POSTing to NextAuth's signout endpoint
+// Sign Out page â€” confirms signout by POSTing to NextAuth's signout endpoint
 
 "use client";
 
@@ -9,13 +9,13 @@ export default function SignoutPage() {
   const router = useRouter();
 
   async function handleSignout() {
-    await signOut({ callbackUrl: "/login" });
+    await signOut({ callbackUrl: "/auth" });
   }
 
   return (
     <div className="text-center">
       <h1 className="text-2xl font-bold">Sign out</h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-slate-400">
         Are you sure you want to sign out?
       </p>
       <div className="mt-6 space-y-2">
@@ -27,7 +27,7 @@ export default function SignoutPage() {
         </button>
         <button
           onClick={() => router.push("/dashboard")}
-          className="w-full rounded bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+          className="w-full rounded bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700"
         >
           Cancel
         </button>

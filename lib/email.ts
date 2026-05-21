@@ -1,11 +1,19 @@
-// Resend email helpers — sends verification and password reset emails
+// Nodemailer helpers — sends verification and password reset emails
 
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || "587"),
+  secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASSWORD,
+  },
+});
 
-const FROM = process.env.RESEND_FROM_EMAIL!;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
+const FROM = process.env.SMTP_FROM || process.env.SMTP_USER;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export async function sendVerificationEmail(
   email: string,
@@ -14,11 +22,11 @@ export async function sendVerificationEmail(
   try {
     const verifyUrl = `${APP_URL}/verify-email?token=${token}`;
 
-    await resend.emails.send({
+    await transporter.sendMail({
       from: FROM,
       to: email,
       subject: "Verify your email address",
-      html: `<p>Click the link below to verify your email address:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
+      html: `<p>Click the link below to verify your email address:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 15 minutes.</p>`,
     });
 
     return { success: true };
@@ -38,7 +46,7 @@ export async function sendPasswordResetEmail(
   try {
     const resetUrl = `${APP_URL}/reset-password?token=${token}`;
 
-    await resend.emails.send({
+    await transporter.sendMail({
       from: FROM,
       to: email,
       subject: "Reset your password",

@@ -1,4 +1,4 @@
-// NextAuth v5 configuration — Credentials provider with email/password auth
+// NextAuth v5 configuration â€” Credentials provider with email/password auth
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
@@ -61,19 +61,53 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.emailVerified = (user as { emailVerified: boolean }).emailVerified;
+        return token;
+      }
+      if (token.id) {
+        try {
+          const dbUser = await db.user.findUnique({
+            where: { id: token.id as string },
+            select: { passwordChangedAt: true },
+          });
+          if (dbUser) {
+            const tokenIat = token.iat
+              ? new Date(token.iat * 1000).getTime()
+              : 0;
+            if (dbUser.passwordChangedAt.getTime() > tokenIat + 1000) {
+              return {};
+            }
+          }
+        } catch {
+          console.error("JWT passwordChangedAt check failed");
+        }
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session: rawSession, token }) {
+      const session = rawSession as {
+        user: { id: string; emailVerified: boolean };
+      };
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.emailVerified = token.emailVerified as boolean;
+        const tokenVerified = token.emailVerified as boolean;
+        session.user.emailVerified = tokenVerified;
+        if (!tokenVerified) {
+          try {
+            const dbUser = await db.user.findUnique({
+              where: { id: token.id as string },
+              select: { emailVerified: true },
+            });
+            if (dbUser) session.user.emailVerified = dbUser.emailVerified;
+          } catch {
+            console.error("Session emailVerified DB check failed");
+          }
+        }
       }
-      return session;
+      return rawSession;
     },
   },
   pages: {
-    signIn: "/login",
+    signIn: "/auth",
   },
   session: {
     strategy: "jwt",

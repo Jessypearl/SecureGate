@@ -3,6 +3,7 @@
 "use server";
 
 import { z } from "zod";
+import { headers } from "next/headers";
 import { db } from "./db";
 import { hashPassword } from "./password";
 import {
@@ -10,36 +11,50 @@ import {
   createPasswordResetToken,
   validateVerificationToken,
   validatePasswordResetToken,
+  consumePasswordResetToken,
 } from "./tokens";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./email";
+import { checkRateLimit } from "./rate-limiter";
+
+const emailSchema = z.string().email("Invalid email address");
+
+const passwordSchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .regex(/[A-Z]/, "Password must contain an uppercase letter")
+  .regex(/[a-z]/, "Password must contain a lowercase letter")
+  .regex(/[0-9]/, "Password must contain a number");
 
 const signupSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .regex(/[A-Z]/, "Password must contain an uppercase letter")
-    .regex(/[a-z]/, "Password must contain a lowercase letter")
-    .regex(/[0-9]/, "Password must contain a number"),
+  email: emailSchema,
+  password: passwordSchema,
 });
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  email: emailSchema,
 });
 
 const resetPasswordSchema = z.object({
   token: z.string().min(1),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .regex(/[A-Z]/, "Password must contain an uppercase letter")
-    .regex(/[a-z]/, "Password must contain a lowercase letter")
-    .regex(/[0-9]/, "Password must contain a number"),
+  password: passwordSchema,
 });
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
   | { success: false; error: string };
+
+async function getClientIp(): Promise<string> {
+  try {
+    const h = await headers();
+    const forwarded = h.get("x-forwarded-for")?.split(",")[0]?.trim();
+    if (forwarded) return forwarded;
+    const realIp = h.get("x-real-ip");
+    if (realIp) return realIp;
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 export async function signup(
   prevState: ActionResult | null,
@@ -59,31 +74,53 @@ export async function signup(
 
   const { email, password } = parsed.data;
 
+  const ip = await getClientIp();
+  const rl = checkRateLimit(`signup:${ip}`);
+  if (!rl.allowed) {
+    return { success: false, error: "Too many requests. Please try again later." };
+  }
+
   try {
     const existing = await db.user.findUnique({ where: { email } });
 
     if (existing) {
-      return {
-        success: false,
-        error: "An account with this email already exists.",
-      };
+      if (existing.emailVerified) {
+        return {
+          success: false,
+          error: "An account with this email already exists.",
+        };
+      }
     }
 
     const passwordHash = await hashPassword(password);
 
-    const user = await db.user.create({
-      data: {
-        email,
-        passwordHash,
-      },
-    });
+    let user;
+    if (existing) {
+      user = await db.user.update({
+        where: { id: existing.id },
+        data: { passwordHash },
+      });
+    } else {
+      user = await db.user.create({
+        data: {
+          email,
+          passwordHash,
+        },
+      });
+    }
 
     const rawToken = await createVerificationToken(user.id);
 
     const emailResult = await sendVerificationEmail(email, rawToken);
 
     if (!emailResult.success) {
-      await db.user.delete({ where: { id: user.id } });
+      if (!existing) {
+        try {
+          await db.user.delete({ where: { id: user.id } });
+        } catch (delErr) {
+          console.error("Failed to rollback user creation:", delErr);
+        }
+      }
       return {
         success: false,
         error: emailResult.error ?? "Failed to send verification email.",
@@ -116,6 +153,12 @@ export async function forgotPassword(
   }
 
   const { email } = parsed.data;
+
+  const ip = await getClientIp();
+  const rl = checkRateLimit(`forgot-password:${ip}`);
+  if (!rl.allowed) {
+    return { success: false, error: "Too many requests. Please try again later." };
+  }
 
   try {
     const user = await db.user.findUnique({ where: { email } });
@@ -156,10 +199,16 @@ export async function resetPassword(
 
   const { token, password } = parsed.data;
 
-  try {
-    const userId = await validatePasswordResetToken(token);
+  const ip = await getClientIp();
+  const rl = checkRateLimit(`reset-password:${ip}`);
+  if (!rl.allowed) {
+    return { success: false, error: "Too many requests. Please try again later." };
+  }
 
-    if (!userId) {
+  try {
+    const record = await validatePasswordResetToken(token);
+
+    if (!record) {
       return {
         success: false,
         error: "This reset link is invalid or has expired.",
@@ -169,9 +218,11 @@ export async function resetPassword(
     const passwordHash = await hashPassword(password);
 
     await db.user.update({
-      where: { id: userId },
-      data: { passwordHash },
+      where: { id: record.userId },
+      data: { passwordHash, passwordChangedAt: new Date() },
     });
+
+    await consumePasswordResetToken(record.id);
 
     return { success: true, data: undefined };
   } catch (err) {
