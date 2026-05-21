@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ProfileDropdown } from "./profile-dropdown";
 
+
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const session = await auth();
 
@@ -150,11 +153,10 @@ function SidebarLink({
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-        active
+      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${active
           ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/30"
           : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border border-transparent"
-      }`}
+        }`}
     >
       {children}
     </Link>
